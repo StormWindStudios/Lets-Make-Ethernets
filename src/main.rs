@@ -4,19 +4,18 @@ use pnet::packet::Packet;
 use pnet_datalink::Channel;
 
 fn main() {
-
     // List interfaces, iterate over them, and find the one
-    // named "en0"
+    // named "en4"
     let interface = pnet_datalink::interfaces()
         .into_iter()
-        .find(|iface| iface.name == "en0")
+        .find(|iface| iface.name == "en4")
         .unwrap();
     
     // Define the three components of an Ethernet frame header:
     // 1) Destination MAC address
     // 2) Source MAC address (which we get from the interface)
     // 3) EtherType 
-    let dest_mac = [0x70, 0x85, 0xc2, 0xb2, 0xf6, 0x35];
+    let dest_mac = [0x14, 0xb3, 0x1f, 0x23, 0x8c, 0xc6];
     let src_mac: [u8; 6] = interface.mac.unwrap().into();
     let ether_type: [u8; 2] = [0x88, 0xb5];
 
@@ -34,6 +33,10 @@ fn main() {
         ethernet_buffer.extend_from_slice(&dest_mac);
         ethernet_buffer.extend_from_slice(&src_mac);
         ethernet_buffer.extend_from_slice(&ether_type);
+
+
+        println!("\nEthernet header: {:x?}", ethernet_buffer);
+        println!("\t\t |---------DST----------||--------SRC---------||--ET--|\n");
         ethernet_buffer.extend_from_slice(&payload);
 
     // Add padding if needed (when data length < 46)
@@ -47,11 +50,12 @@ fn main() {
     }
 
     // Create a CRC hasher, hash the current frame, and append the bytes 
-    let mut hasher = Hasher::new();
-    hasher.update(&ethernet_buffer);
-    let crc = hasher.finalize(); 
-    ethernet_buffer.extend_from_slice(&crc.to_le_bytes());    // Little-endian bytes, specifically.
-    let ethernet_frame = EthernetPacket::new(&ethernet_buffer).unwrap();
+    let mut hasher = Hasher::new();                                         // New hasher
+    hasher.update(&ethernet_buffer);                                        // Hash current frame
+    let crc = hasher.finalize();                                            // Finish up
+    ethernet_buffer.extend_from_slice(&crc.to_le_bytes());                  // Add hash to frame Little-endian bytes, specifically.
+    let ethernet_frame = EthernetPacket::new(&ethernet_buffer).unwrap();    // Map existing raw bytes to an Ethernet frame data structure
+                                                                            // Aside: ethernet "packet" is not the correct terminology. 'Tis a frame.
 
     // Create a transmitting and recieving channel (the reciever is not used)
     let (mut tx, mut _rx) = match pnet_datalink::channel(&interface, Default::default()) {
